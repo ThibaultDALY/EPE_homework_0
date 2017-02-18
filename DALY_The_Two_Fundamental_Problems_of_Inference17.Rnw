@@ -444,6 +444,40 @@ Here is the result of the computation of our function, $\hat{2\bar{\epsilon}}=$\
 
 \subsection{Estimate bootstrapped approximation to sampling noise in generated data}
 
+In order to estimate the sampling noise with bootstrapped method on our generated data we replicate the small algorthim that was decine and explian in class and run it 500 times: 
+<<bootstrap.ww.test,eval=TRUE,echo=TRUE,warning=FALSE,error=FALSE,message=FALSE,results='hide',cache=TRUE,dependson=c('param','simul.no.selb.1234.bis')>>=
+data <- as.data.frame(cbind(y,Ds,yB))
+boot.fun.ww.1 <- function(seed,data){
+  set.seed(seed,kind="Wichmann-Hill")
+  data <- data[sample(nrow(data),replace = TRUE),]
+  ols.ww <- lm(y~Ds,data=data)
+  ww <- ols.ww$coef[[2]]
+  return(ww)
+}
+
+boot.fun.ww <- function(Nboot,data){
+  #sfInit(parallel=TRUE,cpus=8)
+  boot <- lapply(1:Nboot,boot.fun.ww.1,data=data)
+  #sfStop()
+  return(unlist(boot))
+}
+
+boot.CI.ww <- function(boot,delta){
+  return(c(quantile(boot,prob=(1-delta)/2),quantile(boot,prob=(1+delta)/2)))
+}
+
+boot.samp.noise.ww <- function(boot,delta){
+  return(quantile(boot,prob=(1+delta)/2)-quantile(boot,prob=(1-delta)/2))
+}
+
+Nboot <- 500
+ww.boot <- boot.fun.ww(Nboot,data)
+ww.CI.boot <- boot.CI.ww(ww.boot,delta)
+ww.samp.noise.boot <- boot.samp.noise.ww(ww.boot,delta)
+@
+%
+After the end of the algorthim the approximation of the sampling noise is, \Sexpr{round(ww.samp.noise.boot,3)}. 
+
 \end{document}
 
 
