@@ -478,6 +478,33 @@ ww.samp.noise.boot <- boot.samp.noise.ww(ww.boot,delta)
 %
 After the end of the algorthim the approximation of the sampling noise is, \Sexpr{round(ww.samp.noise.boot,3)}. 
 
+\subsection{Estimate Fisher-based approximation to sampling noise in generated data}
+
+<<fisher.ww.test,eval=TRUE,echo=TRUE,warning=FALSE,error=FALSE,message=FALSE,results='hide',cache=TRUE,dependson=c('param','simul.no.selb.1234.bis')>>=
+fisher.fun.ww.1 <- function(seed,data){
+  set.seed(seed,kind="Wichmann-Hill")
+  data$D <- rbinom(nrow(data),1,mean(data$Ds))
+  ols.ww <- lm(y~D,data=data)
+  ww <- ols.ww$coef[[2]]
+  return(ww)
+}
+
+fisher.fun.ww <- function(Nfisher,data,delta){
+  fisher <- unlist(lapply(1:Nfisher,fisher.fun.ww.1,data=data))
+  ols.ww <- lm(y~Ds,data=data)
+  ww <- ols.ww$coef[[2]]
+  fisher <- fisher+ ww
+  fisher.CI.ww <- c(quantile(fisher,prob=(1-delta)/2),quantile(fisher,prob=(1+delta)/2))
+  fisher.samp.noise.ww <- quantile(fisher,prob=(1+delta)/2)-quantile(fisher,prob=(1-delta)/2)
+  return(list(fisher,fisher.CI.ww,fisher.samp.noise.ww))
+}
+
+Nfisher <- 500
+ww.fisher <- fisher.fun.ww(Nfisher,data,delta)
+@
+%
+After running the code wich is prety similar as computing a bootstrap we have the approximation of sampling noise with the Fisher-based approximation, \Sexpr{round(ww.fisher[[3]],3)}.
+
 \end{document}
 
 
