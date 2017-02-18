@@ -1,0 +1,510 @@
+\documentclass[twoside,11pt]{article}
+
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=3cm,bottom=3cm,left=2cm,right=2cm,marginparwidth=1.75cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{amsfonts}
+\usepackage{setspace} 
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{multicol}
+\usepackage{dcolumn}
+\usepackage{hyperref}
+\usepackage[super]{nth}
+\renewcommand{\baselinestretch}{1}
+\newcommand{\overbar}[1]{\mkern 1.5mu\overline{\mkern-1.5mu#1\mkern-1.5mu}\mkern 1.5mu}
+\title{EPE - Exercices \\ The Two Fundamental Problems of Inference}
+\author{Thibault Daly}
+
+<<libraries,eval=TRUE,include=FALSE>>=
+library(MASS)
+library(RColorBrewer)
+library(gplots)
+library(ggplot2)
+library(snowfall)
+library(xtable)
+library(cowplot)
+library(sandwich)
+@
+% package to generate commands with double letters in maths
+\usepackage{dsfont}
+\newcommand{\esp}[1]{\mathbb{E}[ #1 ]}
+\newcommand{\var}[1]{\mathbb{V}[ #1 ]}
+\newcommand{\cov}[1]{\mathbb{C}[ #1 ]}
+\newcommand{\un}[1]{\mathds{1}[ #1 \geq0]}
+\newcommand{\unn}[1]{\mathds{1}[ #1 <0]}
+\newcommand{\uns}[1]{\mathds{1}[ #1 ]}
+\newcommand\Ind{\protect\mathpalette{\protect\independenT}{\perp}}
+\def\independenT#1#2{\mathrel{\setbox0\hbox{$#1#2$}\copy0\kern-\wd0\mkern4mu\box0}} 
+\newcommand{\plim}[1]{\text{plim}_{ #1 \rightarrow \infty}}
+\newcommand{\plims}{\text{plim}}
+\newcommand{\partder}[2]{\frac{\partial #1}{\partial #2}}
+\DeclareMathOperator{\diag}{diag}
+%
+\begin{document}
+
+\maketitle%
+
+\begin{abstract}
+In this paper we will do a exercice of repdroduction. Indeed, this paper will be the solution of exercices on the Lectures 0. In order to do that we will use knitr and produce our results from Rstudio. 
+\end{abstract}
+
+\section{Assignements}
+\begin{enumerate}
+\item	Create a knitr file .Rnw
+\item	Generate the data with baseline parameter values
+\item	plot Figure 1 and Table 1
+\item	plot potential outcomes along yB as in the slides
+\item	Compute TTs, WW and SB in the sample
+\item	Compute BA and TB in the sample
+\item	Generate data without selection bias
+\item	Compute WW and SB
+\item	Compute placebo test for WW and BA
+\item	Generate data without time trend bias
+\item	Compute BA and TB
+\item	Compute placebo test
+\item	dowlnoad data from the paper you chose to analyze (use the readDTS function in R to import the .rds files)
+\item	On the data for the treatment arm, compute WW  and BA if you can (if pre-treatment outcome exists)
+\item	Estimate Cheyshev's upper bound on precision in generated data
+\item	Estimate CLT-based approximation to sampling noise in generated data
+\item	Estimate bootstrapped approximation to sampling noise in generated data
+\item	Estimate Fisher-based approximation to sampling noise in generated data
+\item	Follow the same steps in the treatment arm of your RCT
+\item	Advanced: for those who fill like it, look at what happens when the treatment effect is in levels, not logs (Use Monte Carlos). CLT should perform less well in small samples.
+\item dowlnoad data from the paper you chose to analyze (use the readDTS function in R to import the .rds files)
+\item On the data for the treatment arm, compute WW  and BA if you can (if pre-treatment outcome exists)
+\item Estimate Cheyshev's upper bound on precision in generated data
+\item Estimate CLT-based approximation to sampling noise in generated data
+\item Estimate bootstrapped approximation to sampling noise in generated data
+\item Estimate Fisher-based approximation to sampling noise in generated data
+\item Follow the same steps in the treatment arm of your RCT
+\end{enumerate}
+%---------------------------------------------------------%
+\subsection{Create a knitr file .Rnw}
+
+First step we created a knitr file which is a R file with a combination of latex.
+
+\subsection{Generate the data with baseline parameter values}
+
+Here we are asked to generate a data with a certain framework that was well deteled in class : 
+\begin{align*}
+y_i^B & = \mu_i+U_i^B  \ with \ \mu_i \sim \mathcal{N}(\mu,\,\sigma_\mu^{2}) \ and \ U_i^B \sim \mathcal{N}(0,\,\sigma_U^{2}) 
+\end{align*} 
+We then select the values of the parameters :
+%
+<<param.init,eval=TRUE,echo=TRUE,results='markup'>>=
+param <- c(8,.5,.28,1500)
+names(param) <- c("barmu","sigma2mu","sigma2U","barY")
+param
+@
+In order to check the correctness of the computation we take the same random sample as the professor thanks to set.seed()
+And we then simulate a random sample following normals. 
+%
+<<YiBD,eval=TRUE,echo=TRUE,results='hide'>>=
+
+set.seed(1234)
+N <-1000
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+YB <- exp(yB)
+Ds <- ifelse(YB<=param["barY"],1,0) 
+@
+%
+\subsection{plot Figure 1 and Table 1}
+%
+
+<<histyb,eval=TRUE,echo=FALSE,results='hide',fig.cap='Histogram of $y_B$',fig.align='center',out.width='.5\\textwidth',fig.pos='H'>>=
+# building histogram of yB with cutoff point at ybar
+# Number of steps
+Nsteps.1 <- 15
+#step width
+step.1 <- (log(param["barY"])-min(yB[Ds==1]))/Nsteps.1
+Nsteps.0 <- (-log(param["barY"])+max(yB[Ds==0]))/step.1
+breaks <- cumsum(c(min(yB[Ds==1]),c(rep(step.1,Nsteps.1+Nsteps.0+1))))
+hist(yB,breaks=breaks,main="")
+abline(v=log(param["barY"]),col="red")
+@
+%
+You can see on Figure~\ref{fig:histyb} a histogram of $y_i^B$ with the red line indicating the cutoff point: $\bar{y}=\ln(\bar{Y})=$\Sexpr{log(param["barY"])}.So on the left side of the cutoff value the sample is treated. 
+We then design a table to see excatly how many people are treated and how much are not. 
+
+%
+<<table.D.sharp,eval=TRUE,echo=FALSE,results='asis',warning=FALSE,error=FALSE,message=FALSE>>=
+table.D.sharp <- table(Ds)
+xtable(table.D.sharp,caption='Treatment allocation with sharp cutoff rule',label='tab:table.D.sharp')
+@
+%
+<<param,eval=TRUE,echo=FALSE,results='hide'>>=
+param <- c(8,.5,.28,1500,0.9,0.01,0.05,0.05,0.05,0.1)
+names(param) <- c("barmu","sigma2mu","sigma2U","barY","rho","theta","sigma2epsilon","sigma2eta","delta","baralpha")
+@
+
+%
+<<simul,eval=TRUE,echo=FALSE,results='hide'>>=
+set.seed(1234)
+N <-1000
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+Ds <- rep(0,N)
+Ds[yB<=log(param["barY"])] <- 1 
+epsilon <- rnorm(N,0,sqrt(param["sigma2epsilon"]))
+eta<- rnorm(N,0,sqrt(param["sigma2eta"]))
+U0 <- param["rho"]*UB + epsilon
+y0 <- mu +  U0 + param["delta"]
+alpha <- param["baralpha"]+  param["theta"]*mu + eta
+y1 <- y0+alpha
+Y0 <- exp(y0)
+Y1 <- exp(y1)
+y <- y1*Ds+y0*(1-Ds)
+Y <- Y1*Ds+Y0*(1-Ds)
+@
+%
+\newpage
+\subsection{plot potential outcomes along yB as in the slides}
+In order to plot the potential outcomes we first generate a data perfectly matching what we saw in class and here is the plot : 
+<<plot.y1.y0.TT,eval=TRUE,echo=FALSE,results='hide',fig.cap='Potential outcomes',fig.align='center',out.width='.7\\textwidth',fig.pos='H'>>=
+plot(yB,y0,pch=1,col='blue',xlim=c(5,11),ylim=c(5,11),xlab="yB",ylab="Outcomes")
+points(yB,y1,pch=3,col='green')
+legend(5,11,c('y0','y1'),pch=c(1,3),col=c('blue','green'),ncol=1)
+@
+%
+
+\subsection{Compute TTs, WW and SB in the sample}
+%
+<<delta.y.tt,eval=TRUE,echo=FALSE,results='hide'>>=
+delta.y.tt <- function(param){
+  return(param["baralpha"]+param["theta"]*param["barmu"]-param["theta"]*((param["sigma2mu"]*dnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))/(sqrt(param["sigma2mu"]+param["sigma2U"])*pnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))))
+}
+@
+\begin{itemize}
+  \item The average Treatment effect on the Treated in the sample (TT) :
+\begin{align*}
+\Delta_{TT_s}^Y & = \frac{1}{\sum_{i=1}^ND_i}\sum_{i=1}^NY_iD_i - \frac{1}{\sum_{i=1}^ND_i}\sum_{i=1}^NY_i^0D_i\\
+                & = \Sexpr{round(mean(alpha[Ds==1]),3)}
+\end{align*}
+% the function for computing it is in the code chunk above named delta.y.tt
+ 
+\item The with/without comparison in the sample (WW) :
+\begin{align*}
+  \Delta^Y_{WW} & = \esp{Y_i|D_i=1} - \esp{Y_i|D_i=0} 
+    \end{align*}
+In our sample we get the following value for the WW :
+\begin{align*}
+  \hat{\Delta^Y_{WW}} & = \frac{1}{\sum_{i=1}^N D_i}\sum_{i=1}^N Y_iD_i-\frac{1}{\sum_{i=1}^N (1-D_i)}\sum_{i=1}^N Y_i(1-D_i)\\
+                        & = \Sexpr{round(mean(y[Ds==1])-mean(y[Ds==0]),3)}\\
+  \end{align*}
+
+%
+<<WW.SB,eval=TRUE,echo=FALSE,results='hide'>>=
+delta.y.sb <- function(param){
+  return(-(param["sigma2mu"]+param["rho"]*param["sigma2U"])/sqrt(param["sigma2mu"]+param["sigma2U"])
+         *dnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"])))
+         *(1/pnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"])))
+           +1/(1-pnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))))
+}
+delta.y.ww <- function(param){
+  return(delta.y.tt(param)+delta.y.sb(param))
+}
+@  
+%
+\item Selection bias (SB) : 
+\begin{align*}
+  \Delta^Y_{SB} & =\Delta^Y_{WW}-\Delta^Y_{TT}\\
+                & = \esp{Y^1_i|D_i=1} -\esp{Y^0_i|D_i=0} - (\esp{Y^1_i|D_i=1} - \esp{Y^0_i|D_i=1}) \\
+                & = \esp{Y^0_i|D_i=1} - \esp{Y^0_i|D_i=0} \\
+                & = \Sexpr{round(mean(y0[Ds==1])-mean(y[Ds==0]),3)}\\
+\end{align*} 
+\end{itemize}
+
+\subsection{Compute BA and TB in the sample}
+\begin{itemize}
+
+\item The before/after comparison (BA): 
+The Before/After estimator compares the expected outcomes on the treated group before and after the treatment in the population 
+    \begin{align*}
+    \Delta^Y_{BA} & = \esp{Y_i|D_i=1} - \esp{Y_i^B|D_i=1}\\
+  \hat{\Delta^Y_{BA}} & = \frac{1}{\sum_{i=1}^N D_i}\sum_{i=1}^N Y_iD_i-\frac{1}{\sum_{i=1}^N D_i}\sum_{i=1}^N Y^B_iD_i\\
+                      & = \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)}\\
+  \end{align*}
+So the  BA in the sample is $ \hat{\Delta^Y_{BA}} = \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)}$.
+%
+<<BA.TB,eval=TRUE,echo=FALSE,results='hide'>>=
+delta.y.tb <- function(param){
+  return(param["delta"]
+          +(1-param["rho"])*((param["sigma2U"])/sqrt(param["sigma2mu"]+param["sigma2U"]))
+         *dnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"])))
+         /pnorm((log(param["barY"])-param["barmu"])/(sqrt(param["sigma2mu"]+param["sigma2U"]))))
+}
+delta.y.ba <- function(param){
+  return(delta.y.tt(param)+ delta.y.tb(param))
+}
+@  
+\item Time Trend Bias (TB):
+\begin{align*}
+  \Delta^Y_{TB} & = \Delta^Y_{BA}-\Delta^Y_{TT} \\
+                & = \esp{Y^1_i|D_i=1} -\esp{Y^B_i|D_i=1} - (\esp{Y^1_i|D_i=1} - \esp{Y^0_i|D_i=1}) \\
+                & = \esp{Y^0_i|D_i=1} - \esp{Y^B_i|D_i=1}\\
+                & = \Sexpr{round(mean(y0[Ds==1])-mean(yB[Ds==1]),3)}
+\end{align*}
+\end{itemize}
+
+\subsection{Compute placebo tests for WW and BA}
+
+A placebo test looks for eventual effects where we think their should be none, 
+
+%
+We can perfom the placebo test that applies the $WW$ estimator to the untreated if $\hat{\Delta^y_{BA|D=0}} = 0$ for the untreated sample.
+\begin{align*}
+\hat{\Delta^y_{BA|D=0}} & =\Sexpr{round(mean(y[Ds==0])-mean(yB[Ds==0]),3)}
+\end{align*}
+In our case $\hat{\Delta^y_{BA|D=0}} \ne 0 $ hence we the placebo is not validated. 
+
+\subsection{Generate data without selection bias}
+No Selection Bias in The Model Used in the Simulations, hence $ \rho = 0 and \sigma_\mu^{2}= 0 $
+
+<<param2,eval=TRUE,echo=FALSE,results='hide'>>=
+param <- c(8,0,.28,1500,0,0.01,0.05,0.05,0.05,0.1)
+names(param) <- c("barmu","sigma2mu","sigma2U","barY","rho","theta","sigma2epsilon","sigma2eta","delta","baralpha")
+@
+
+<<simul.no.selb,eval=TRUE,echo=TRUE,results='hide'>>=
+set.seed(1234)
+N <-1000
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+Ds <- rep(0,N)
+V <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]+param["sigma2U"]))
+Ds[V<=log(param["barY"])] <- 1 
+epsilon <- rnorm(N,0,sqrt(param["sigma2epsilon"]))
+eta<- rnorm(N,0,sqrt(param["sigma2eta"]))
+U0 <- param["rho"]*UB + epsilon
+y0 <- mu +  U0 + param["delta"]
+alpha <- param["baralpha"]+  param["theta"]*mu + eta
+y1 <- y0+alpha
+Y0 <- exp(y0)
+Y1 <- exp(y1)
+y <- y1*Ds+y0*(1-Ds)
+Y <- Y1*Ds+Y0*(1-Ds)
+@
+
+%
+\subsection{Compute WW and SB}
+If their is no selection bias, we get that WW identifies the TT parameters, $ \Delta^Y_{WW}  = \Delta^Y_{TT} $
+%
+\begin{align*}
+\hat{\Delta^y_{WW}} = \Sexpr{round(mean(y[Ds==1])-mean(y[Ds==0]),3)} \approx \hat{\Delta^y_{TT}} = \Sexpr{round(mean(alpha[Ds==1]),3)} \\
+\hat{\Delta^y_{SB}} = \Sexpr{round(mean(y[Ds==1])-mean(y[Ds==0]),3)} - \Sexpr{round(mean(alpha[Ds==1]),3)} = \Sexpr{round(mean(y[Ds==1])-mean(y[Ds==0]),3)- round(mean(alpha[Ds==1]),3) }
+\end{align*}
+%
+\subsection{Compute placebo tests for WW and BA}
+
+In the absence of the treatment, no treatment effect should be detected before the program is implemented
+%
+\begin{align*}
+\Delta^{Y^B}_{WW} & = \esp{Y_i^B|D_i=1} - \esp{Y_i^B|D_i=0} \\
+                  & = 0
+\end{align*}
+In our sample we get $ \hat{\Delta^{Y^B}_{WW}} = \Sexpr{round(mean(yB[Ds==1]),3)} - \Sexpr{round(mean(yB[Ds==0]),3)} = \Sexpr{round(mean(yB[Ds==1]),3)-round(mean(yB[Ds==0]),3)} $ so here the data that we generated still contains time trend bias so the placebo test is not valid. 
+
+%
+But we can perfom the placebo test that applies the $BA$ estimator to the untreated.
+\begin{align*}
+\hat{\Delta^y_{BA|D=0}} & =\Sexpr{round(mean(y[Ds==0])-mean(yB[Ds==0]),3)}
+\end{align*}
+
+\subsection{Generate data without time trend bias}
+%
+In order to generate data wihtout time trend bias we need to change and fix to zero the following factors:
+$ \delta = 0 $ and $ \rho = 0 $
+
+<<param.no.tb,eval=TRUE,echo=TRUE>>=
+param <- c(8,0.5,.28,1500,1,0.01,0.05,0.05,0,0.1)
+names(param) <- c("barmu","sigma2mu","sigma2U","barY","rho","theta","sigma2epsilon","sigma2eta","delta","baralpha")
+@
+%
+<<simul.no.tb,eval=TRUE,echo=TRUE,results='markup'>>=
+set.seed(1234)
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+YB <- exp(yB)
+Ds <- rep(0,N)
+Ds[YB<=param["barY"]] <- 1 
+epsilon <- rnorm(N,0,sqrt(param["sigma2epsilon"]))
+eta<- rnorm(N,0,sqrt(param["sigma2eta"]))
+U0 <- param["rho"]*UB + epsilon
+y0 <- mu +  U0 + param["delta"]
+alpha <- param["baralpha"]+  param["theta"]*mu + eta
+y1 <- y0+alpha
+Y0 <- exp(y0)
+Y1 <- exp(y1)
+y <- y1*Ds+y0*(1-Ds)
+Y <- Y1*Ds+Y0*(1-Ds)
+@
+%
+
+\subsection{Compute BA and TB}
+
+The before/after comparison (BA): $ \hat{\Delta^y_{BA}} = \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)} $.
+
+%
+Time Trend Bias (TB): we already computed $\Delta^y_{TT_s}$,  
+\begin{align*}
+\hat{\Delta^y_{TB}}  = \hat{\Delta^y_{BA}} - \Delta^y_{TT_s}
+= \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)} - \Sexpr{round(mean(alpha[Ds==1]),3)} 
+= \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)-round(mean(alpha[Ds==1]),3)}
+\end{align*}
+In the data by construction their is no time trend so its normal that we get a value close to 0.
+\subsection{Compute placebo test}
+
+We can perfom the placebo test that applies the $BA$ estimator to the untreated, $\hat{\Delta^y_{BA|D=0}} =\Sexpr{round(mean(y[Ds==0])-mean(yB[Ds==0]),3)} \approx 0 $ since their is not time trend in this data. 
+
+\subsection{dowlnoad data from the paper you chose to analyze (use the readDTS function in R to import the .rds files)}
+
+<<import.data,eval=TRUE,echo=TRUE,results='hide'>>=
+data <- readRDS("C:/Users/xavierdaly/Desktop/LAST YEAR OF SCHOOL/SEMESTRE 10/Econometrics of Program Evaluation/PAPERS/36_Behaghel.rds")
+data
+@
+
+\subsection{On the data for the treatment arm, compute WW  and BA if you can (if pre-treatment outcome exists)}
+
+The with/without comparison in the sample (WW) :
+\begin{align*}
+  \hat{\Delta^Y_{WW}} & = \frac{1}{\sum_{i=1}^N D_i}\sum_{i=1}^N Y_iD_i-\frac{1}{\sum_{i=1}^N (1-D_i)}\sum_{i=1}^N Y_i(1-D_i)\\
+                        & = \Sexpr{round(mean(y[Ds==1])-mean(y[Ds==0]),3)}\\
+\end{align*}
+
+The before/after comparison (BA): 
+\begin{align*}
+\hat{\Delta^y_{BA}} & = \Sexpr{round(mean(y[Ds==1])-mean(yB[Ds==1]),3)}.
+\end{align*}
+
+\subsection{Estimate Cheyshev's upper bound on precision in generated data}
+
+First we write the function in R that will compute the Cheyshev's upper bound : 
+
+<<samp.noise.ww.cheb,eval=TRUE,echo=TRUE,results='hide'>>=
+samp.noise.ww.cheb <- function(N,delta,v1,v0,p){
+  return(2*sqrt((v1/p+v0/(1-p))/(N*(1-delta))))
+}
+@
+%
+Now we generate ou usual sample an keep the same seed in order to check our result with the one obtained in the lectures.
+%
+<<simul.no.selb.1234.bis,eval=TRUE,echo=TRUE,cache=TRUE,dependson='param'>>=
+set.seed(1234)
+N <-1000
+delta <- 0.99
+mu <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]))
+UB <- rnorm(N,0,sqrt(param["sigma2U"]))
+yB <- mu + UB 
+YB <- exp(yB)
+Ds <- rep(0,N)
+V <- rnorm(N,param["barmu"],sqrt(param["sigma2mu"]+param["sigma2U"]))
+Ds[V<=log(param["barY"])] <- 1 
+epsilon <- rnorm(N,0,sqrt(param["sigma2epsilon"]))
+eta<- rnorm(N,0,sqrt(param["sigma2eta"]))
+U0 <- param["rho"]*UB + epsilon
+y0 <- mu +  U0 + param["delta"]
+alpha <- param["baralpha"]+  param["theta"]*mu + eta
+y1 <- y0+alpha
+Y0 <- exp(y0)
+Y1 <- exp(y1)
+y <- y1*Ds+y0*(1-Ds)
+Y <- Y1*Ds+Y0*(1-Ds)
+@
+%
+In our sample, here are the result of the Chebyshev upper bound,
+$\hat{2\bar{\epsilon}}=$\Sexpr{round(samp.noise.ww.cheb(N,delta,var(y[Ds==1]),var(y[Ds==0]),mean(Ds)),2)}.
+
+\subsection{Estimate CLT-based approximation to sampling noise in generated data}
+In this subsection we will compute the CLT-based approximation in the same generated data, first we create a function in R to compute this value : 
+%
+<<samp.noise.ww.CLT,eval=TRUE,echo=TRUE,results='hide'>>=
+samp.noise.ww.CLT <- function(N,delta,v1,v0,p){
+  return(2*qnorm((delta+1)/2)*sqrt((v1/p+v0/(1-p))/N))
+}
+@
+%
+Here is the result of the computation of our function, $\hat{2\bar{\epsilon}}=$\Sexpr{round(samp.noise.ww.CLT(N,delta,var(y[Ds==1]),var(y[Ds==0]),mean(Ds)),2)}.
+
+\subsection{Estimate bootstrapped approximation to sampling noise in generated data}
+
+In order to estimate the sampling noise with bootstrapped method on our generated data we replicate the small algorthim that was decine and explian in class and run it 500 times: 
+<<bootstrap.ww.test,eval=TRUE,echo=TRUE,warning=FALSE,error=FALSE,message=FALSE,results='hide',cache=TRUE,dependson=c('param','simul.no.selb.1234.bis')>>=
+data <- as.data.frame(cbind(y,Ds,yB))
+boot.fun.ww.1 <- function(seed,data){
+  set.seed(seed,kind="Wichmann-Hill")
+  data <- data[sample(nrow(data),replace = TRUE),]
+  ols.ww <- lm(y~Ds,data=data)
+  ww <- ols.ww$coef[[2]]
+  return(ww)
+}
+
+boot.fun.ww <- function(Nboot,data){
+  #sfInit(parallel=TRUE,cpus=8)
+  boot <- lapply(1:Nboot,boot.fun.ww.1,data=data)
+  #sfStop()
+  return(unlist(boot))
+}
+
+boot.CI.ww <- function(boot,delta){
+  return(c(quantile(boot,prob=(1-delta)/2),quantile(boot,prob=(1+delta)/2)))
+}
+
+boot.samp.noise.ww <- function(boot,delta){
+  return(quantile(boot,prob=(1+delta)/2)-quantile(boot,prob=(1-delta)/2))
+}
+
+Nboot <- 500
+ww.boot <- boot.fun.ww(Nboot,data)
+ww.CI.boot <- boot.CI.ww(ww.boot,delta)
+ww.samp.noise.boot <- boot.samp.noise.ww(ww.boot,delta)
+@
+%
+After the end of the algorthim the approximation of the sampling noise is, \Sexpr{round(ww.samp.noise.boot,3)}. 
+
+\subsection{Estimate Fisher-based approximation to sampling noise in generated data}
+
+<<fisher.ww.test,eval=TRUE,echo=TRUE,warning=FALSE,error=FALSE,message=FALSE,results='hide',cache=TRUE,dependson=c('param','simul.no.selb.1234.bis')>>=
+fisher.fun.ww.1 <- function(seed,data){
+  set.seed(seed,kind="Wichmann-Hill")
+  data$D <- rbinom(nrow(data),1,mean(data$Ds))
+  ols.ww <- lm(y~D,data=data)
+  ww <- ols.ww$coef[[2]]
+  return(ww)
+}
+
+fisher.fun.ww <- function(Nfisher,data,delta){
+  fisher <- unlist(lapply(1:Nfisher,fisher.fun.ww.1,data=data))
+  ols.ww <- lm(y~Ds,data=data)
+  ww <- ols.ww$coef[[2]]
+  fisher <- fisher+ ww
+  fisher.CI.ww <- c(quantile(fisher,prob=(1-delta)/2),quantile(fisher,prob=(1+delta)/2))
+  fisher.samp.noise.ww <- quantile(fisher,prob=(1+delta)/2)-quantile(fisher,prob=(1-delta)/2)
+  return(list(fisher,fisher.CI.ww,fisher.samp.noise.ww))
+}
+
+Nfisher <- 500
+ww.fisher <- fisher.fun.ww(Nfisher,data,delta)
+@
+%
+After running the code wich is prety similar as computing a bootstrap we have the approximation of sampling noise with the Fisher-based approximation, \Sexpr{round(ww.fisher[[3]],3)}.
+
+\end{document}
+
+
